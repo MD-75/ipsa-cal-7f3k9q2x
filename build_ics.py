@@ -2,6 +2,17 @@
 """Convertit un export du planning Auriga (id|debut|fin|titre|type|desc|salles|profs|statut|examen) en ICS."""
 import sys
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+PARIS = ZoneInfo("Europe/Paris")
+VTIMEZONE = [
+    "BEGIN:VTIMEZONE", "TZID:Europe/Paris",
+    "BEGIN:DAYLIGHT", "TZOFFSETFROM:+0100", "TZOFFSETTO:+0200", "TZNAME:CEST",
+    "DTSTART:19700329T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU", "END:DAYLIGHT",
+    "BEGIN:STANDARD", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "TZNAME:CET",
+    "DTSTART:19701025T030000", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU", "END:STANDARD",
+    "END:VTIMEZONE",
+]
 
 SHORT = {
     "Swarm Robotics algorithms and application in control and design of dynamical system": "Swarm Robotics",
@@ -37,8 +48,13 @@ def fold(line):
     return "\r\n".join(out)
 
 
-def stamp(iso):
-    return datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").strftime("%Y%m%dT%H%M%SZ")
+def local(iso):
+    """Heure UTC d'Auriga convertie en heure de Paris."""
+    return datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(PARIS)
+
+
+def hm(dt):
+    return dt.strftime("%Hh%M")
 
 
 def event(row, now, with_teachers):
@@ -52,6 +68,8 @@ def event(row, now, with_teachers):
         summary = f"{typ} · {name}"
     else:
         summary = name
+    s, e = local(start), local(end)
+    summary = f"{summary} · {hm(s)}–{hm(e)}"
     details = [title, desc]
     if with_teachers and teachers:
         details.append(teachers.replace(" + ", ", "))
@@ -60,8 +78,8 @@ def event(row, now, with_teachers):
         "BEGIN:VEVENT",
         f"UID:auriga-{id_}@ipsa-planning",
         f"DTSTAMP:{now}",
-        f"DTSTART:{stamp(start)}",
-        f"DTEND:{stamp(end)}",
+        f"DTSTART;TZID=Europe/Paris:{s.strftime('%Y%m%dT%H%M%S')}",
+        f"DTEND;TZID=Europe/Paris:{e.strftime('%Y%m%dT%H%M%S')}",
         f"SUMMARY:{esc(summary)}",
         f"LOCATION:{esc(rooms.replace(' + ', ', '))}",
         f"DESCRIPTION:{esc(details)}",
@@ -87,7 +105,7 @@ def main(src, dst, with_teachers):
         "X-WR-TIMEZONE:Europe/Paris",
         "REFRESH-INTERVAL;VALUE=DURATION:PT6H",
         "X-PUBLISHED-TTL:PT6H",
-    ]
+    ] + VTIMEZONE
     for r in rows:
         lines += event(r, now, with_teachers)
     lines.append("END:VCALENDAR")
