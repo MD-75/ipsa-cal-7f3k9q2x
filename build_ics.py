@@ -69,7 +69,6 @@ def event(row, now, with_teachers):
     else:
         summary = name
     s, e = local(start), local(end)
-    summary = f"{summary} · {hm(s)}–{hm(e)}"
     details = [title, desc]
     if with_teachers and teachers:
         details.append(teachers.replace(" + ", ", "))
